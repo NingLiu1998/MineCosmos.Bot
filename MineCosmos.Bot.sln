@@ -1,0 +1,42 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.33530.505
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MineCosmos.Bot", "MineCosmos.Bot.csproj", "{25A854EB-4A32-47CF-83BD-2A87E490824A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MineCosmos.Bot.Service", "..\MineCosmos.Bot.Service\MineCosmos.Bot.Service.csproj", "{08E2EFCD-ECE6-4245-8179-FFA618277FB6}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MineCosmos.Bot.Entity", "..\MineCosmos.Bot.Entity\MineCosmos.Bot.Entity.csproj", "{3C946A47-4C7C-4046-B756-2281DB5BF6A1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{B18E952D-4E0F-4460-A69F-506438754B92}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{25A854EB-4A32-47CF-83BD-2A87E490824A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25A854EB-4A32-47CF-83BD-2A87E490824A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25A854EB-4A32-47CF-83BD-2A87E490824A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{25A854EB-4A32-47CF-83BD-2A87E490824A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{08E2EFCD-ECE6-4245-8179-FFA618277FB6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{08E2EFCD-ECE6-4245-8179-FFA618277FB6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{08E2EFCD-ECE6-4245-8179-FFA618277FB6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{08E2EFCD-ECE6-4245-8179-FFA618277FB6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3C946A47-4C7C-4046-B756-2281DB5BF6A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3C946A47-4C7C-4046-B756-2281DB5BF6A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3C946A47-4C7C-4046-B756-2281DB5BF6A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3C946A47-4C7C-4046-B756-2281DB5BF6A1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {58612F48-25AB-4AFB-BC86-D87B3D9FA32D}
+	EndGlobalSection
+EndGlobal
