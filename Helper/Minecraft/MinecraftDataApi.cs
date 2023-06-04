@@ -29,6 +29,18 @@ namespace MineCosmos.Bot.Helper.Minecraft
             return profile;
         }
 
+        /// <summary>
+        /// 根据UUID获取skin
+        /// </summary>
+        /// <param name="uuid"></param>
+        /// <returns></returns>
+        public static async Task<Stream> GetMinecraftPlayerSkin(string uuid)
+        {
+            var skinUrl = $"https://crafatar.com/skins/{uuid}";
+            var skinStream = await skinUrl.GetStreamAsync();
+            return skinStream;
+        }
+
         public async static Task<ServerInfoModel> GetServerInfo(string serverAddress, int port)
         {
             using var tcpClient = new TcpClient(serverAddress, port);

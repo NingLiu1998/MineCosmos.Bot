@@ -18,6 +18,9 @@ using Sora.Entities;
 using Sora.Entities.Segment;
 using MineCosmos.Bot.Helper.Minecraft;
 using Newtonsoft.Json;
+using System;
+using Mapster;
+using SqlSugar;
 
 Console.WriteLine("[MineCosmos Bot Center]");
 
@@ -38,14 +41,17 @@ using IHost host = Host.CreateDefaultBuilder(args)
         IConfigurationRoot configurationRoot = configuration.Build();
 
         List<BotOptions> options = new();
+
         configurationRoot.GetSection(nameof(BotOptions))
                          .Bind(options);
 
-
         BotOptions.Init(options);
-        DbContext.Init(configurationRoot, hostingContext);
 
-        DbContext.Db.CodeFirst.InitTables(
+
+        //SqlSugarHelper.InstanceConfigs = configurationRoot.GetSection("ConnectionStrings:SqlSugarConfig")
+        //    .Get<List<SqlSugarConfig>>(); 
+
+        SqlSugarHelper.Instance.CodeFirst.InitTables(
        typeof(PlayerInfoEntity),
         typeof(PlayerSingInRecordEntity),
         typeof(TaskQueueEntity),
@@ -66,7 +72,19 @@ using IHost host = Host.CreateDefaultBuilder(args)
 
 #endregion
 
+
 var service = SoraServiceFactory.CreateService(new ClientConfig() { Port = 8081 });
+
+//启动服务并捕捉错误
+await service.StartService()
+             .RunCatch(e => Log.Error("Sora Service", Log.ErrorLogBuilder(e)));
+
+#region 测试信息
+var stream = ImageGenerator.GenerateImageToStream("第一行内容 123456 \r\n 第二行内容 \r\n 第三行内容");
+await service.GetApi(service.ServiceId)
+    .SendPrivateMessage(1714227099, new MessageBody
+    { SoraSegment.Image(stream), SoraSegment.Text("下午好") });
+#endregion
 
 service.Event.OnPrivateMessage += async (sender, eventArgs) =>
 {
@@ -74,8 +92,14 @@ service.Event.OnPrivateMessage += async (sender, eventArgs) =>
     string command = values[0];
     var privateId = eventArgs.Sender.Id;
 
+
+
     switch (command)
     {
+        case "test":
+            var stream = ImageGenerator.GenerateImageToStream($"测试图片发送");
+            await eventArgs.Reply(new MessageBody { SoraSegment.Image(stream) });
+            break;
         case "注册服务器":
 
             var msg = new MessageBody { "正确格式为：！注册服务器 <服务器名称> <服务器ip地址> <服务器端口号> <Rcon地址> <Rcon端口> <Rcon密码>" };
@@ -83,7 +107,7 @@ service.Event.OnPrivateMessage += async (sender, eventArgs) =>
             if (values.Any(string.IsNullOrWhiteSpace) || values.Length < 7)
             {
                 //context.QuickOperation.Reply?.Add("");                       
-                await eventArgs.Reply( msg);
+                await eventArgs.Reply(msg);
                 return;
             }
 
@@ -109,151 +133,143 @@ service.Event.OnPrivateMessage += async (sender, eventArgs) =>
     }
 };
 
-
 service.Event.OnGroupMessage += async (sender, eventArgs) =>
 {
-    var senderId = eventArgs.Sender.Id;
-    var groupId = eventArgs.SourceGroup.Id;
-    var card = eventArgs.SenderInfo.Card;
-    string text = eventArgs.Message.GetText();
+    try
+    {
 
-    if (groupId != 588504056)
+        var senderId = eventArgs.Sender.Id;
+        var groupId = eventArgs.SourceGroup.Id;
+        var card = eventArgs.SenderInfo.Card;
+        string text = eventArgs.Message.GetText();
+        int msgId = eventArgs.Message.MessageId;
+
+        if (groupId != 588504056)
+            return;
+
+        #region 终端显示      
+
+        AnsiConsole.Write($"[red]原始消息：[/]{eventArgs.Message.RawText}");
+
+        #endregion
+
+        #region 避免风控
+        await Task.Delay(TimeSpan.FromSeconds(new Random().Next(5, 10)));
+        #endregion
+
+        var playerInfo = await SqlSugarHelper.Instance.CopyNew().Queryable<PlayerInfoEntity>().FirstAsync(a => a.QQ == senderId);
+
+        #region 发言记录
+
+        if (playerInfo == null)
+        {
+            var avator = await GroupFunction.DownloadQQImage(senderId.ToString());
+            playerInfo = await SqlSugarHelper.Instance.Insertable(new PlayerInfoEntity
+            {
+                Avatar = avator,
+                QQ = senderId,
+                EmeraldVal = 100,
+                Name = card,
+            }).ExecuteReturnEntityAsync();
+
+            var imgStream = ImageGenerator.GenerateImageToStream("第一次在Q群发言 o.O \r\n 送你100个绿宝石", 10);
+            MessageBody msg = SoraSegment.Reply(msgId) + SoraSegment.Image(imgStream);
+            await eventArgs.Reply(msg);
+            //await Task.Delay(1200);
+        }
+        else
+        {
+            playerInfo.EmeraldVal += 1;
+            playerInfo.UpdateUserId = playerInfo.Id;
+            await SqlSugarHelper.Instance.Updateable(playerInfo).ExecuteCommandAsync();
+        }
+
+        #endregion
+
+        #region 签到
+        var signInInfo = await SqlSugarHelper.Instance.Queryable<PlayerSingInRecordEntity>()
+           .Where(a => a.PlayerId == playerInfo.Id && a.CreateTime == DateTime.Now.ToString("yyyy-MM-dd"))
+             .OrderByDescending(a => a.CreateTime)
+         .FirstAsync();
+
+        if (signInInfo == null)
+        {
+            var msg = await GroupFunction.SignlInAsyncMessage(msgId, playerInfo);
+            await eventArgs.Reply(msg);
+        }
+        #endregion
+
+        #region 功能
+
+
+
+       //string command = msgText.Substring(0, Math.Max(position1, position2));
+
+        //校验指令
+        string msgText = eventArgs.Message.GetText();
+        if (string.IsNullOrWhiteSpace(msgText)) return;
+        int position = Math.Max(msgText.IndexOf("！"), msgText.IndexOf("!"));
+        if (position < 0) return;
+        //解析指令最终值
+        string[] values = CommonFunction.GetCommand(text);
+        string command = values[0];
+        //定义即将发送的消息
+        MessageBody messageBody = null;
+        if (command.StartsWith("uuid", StringComparison.OrdinalIgnoreCase))
+        {
+            messageBody = await GroupFunction.QueryUUIDInfoMessageAsync(values, msgId);
+
+        }
+        else if (command.StartsWith("skin", StringComparison.OrdinalIgnoreCase))
+        {
+            messageBody = await GroupFunction.GetMinecraftPlayerSkin(values, msgId);
+        }
+        else if (command.StartsWith("server")|| command.StartsWith("服务器信息"))
+        {
+            messageBody = await GroupFunction.GetServerInfo(values, msgId);
+        }else if (command.StartsWith("我的信息"))
+        {
+            messageBody = await GroupFunction.GetSystemInfo(values, msgId);
+        }
+
+        //统一使用回复消息
+        if (messageBody != null)            
+            await eventArgs.Reply(messageBody);
+
         return;
 
-    #region 终端显示      
+        #endregion
 
-    AnsiConsole.Write($"[red]原始消息：[/]{eventArgs.Message.RawText}");
+        #region 任务 TODO 
+        //AnsiConsole.Write($"[green]添加到任务队列：[/]{eventArgs.Message.RawText}");
+        //await GroupFunction.JoinTask(new()
+        //{
+        //    ReviceMsg = eventArgs.Message.GetText(),
+        //    SenderGroupId = groupId.ToString(),
+        //    SenderId = senderId.ToString(),
+        //    ReplyId = senderId.ToString(),
+        //    ReplyGroupId = groupId.ToString(),
+        //    GroupOrPrivate = 0,
+        //    Type = 0,
+        //    ExcuteTime = DateTime.Now.AddSeconds(3),
+        //    IsExcute = 0,
+        //});
+        #endregion
 
-    #endregion
-
-    #region 避免风控
-    await Task.Delay(TimeSpan.FromSeconds(new Random().Next(5, 10)));
-    #endregion
-
-    var playerInfo = await DbContext.Db.Queryable<PlayerInfoEntity>().FirstAsync(a => a.QQ == senderId);
-
-    #region 发言记录
-
-    if (playerInfo == null)
-    {
-        var avator = await GroupFunction.DownloadQQImage(senderId.ToString());
-        playerInfo = await DbContext.Db.Insertable(new PlayerInfoEntity
-        {
-            Avatar = avator,
-            QQ = senderId,
-            EmeraldVal = 100,
-            Name = card,
-        }).ExecuteReturnEntityAsync();
-        var msg = new MessageBody();
-        msg.Add(SoraSegment.At(senderId));
-        msg.Add("\n第一次说话喔，送你绿宝石X100");
-        await eventArgs.Reply(msg);
-
-        await Task.Delay(500);
-        //await actionSession.SendGroupMessageAsync(context.GroupId, new CqMessage { tts });
-        //await actionSession.SendPrivateMessageAsync(context.GroupId, new CqMessage { tts });
-        //await actionSession.SendPrivateMessageAsync(context.Sender.UserId, msg);
     }
-    else
+    catch (Exception ex)
     {
-        playerInfo.EmeraldVal += 1;
-        playerInfo.UpdateUserId = playerInfo.Id;
-        await DbContext.Db.Updateable(playerInfo).ExecuteCommandAsync();
+        Console.WriteLine("群消息处理发生异常" + ex.Message);
     }
 
-    #endregion
-
-    #region 签到
-
-    //签到
-    await Task.Delay(300);
-    var signInInfo = await DbContext.Db.Queryable<PlayerSingInRecordEntity>()
-       .Where(a => a.PlayerId == playerInfo.Id && a.CreateTime == DateTime.Now.ToString("yyyy-MM-dd"))
-     .OrderByDescending(a => a.CreateTime)
-     .FirstAsync();
-    bool isSignIn = signInInfo != null;
-    if (!isSignIn)
-    {
-        var item = GroupFunction.GetItem();
-        var integral = new Random().Next(1, 3);
-        var emeraldVal = new Random().Next(5, 10);
-        var luckColors = new List<string> { "红色", "黄色", "绿色", "蓝色", "紫色" };
-        var luckColorndex = new Random().Next(0, luckColors.Count - 1);
-        var luckNumber = new Random().Next(111, 999);
-        var luckVal = new Random().Next(1, 100);
-
-        var recordNum = await DbContext.Db.Queryable<PlayerSingInRecordEntity>()
-           .Where(a => a.Id == playerInfo.Id)
-           .CountAsync();
-
-        await DbContext.Db.Insertable(new PlayerSingInRecordEntity
-        {
-            PlayerId = playerInfo.Id,
-            CreateUserId = playerInfo.Id,
-            UpdateUserId = playerInfo.Id,
-            Integral = integral,
-            EmeraldVal = emeraldVal,
-            LuckColor = luckColors[luckColorndex],
-            LuckNumber = luckNumber,
-            LuckVal = luckVal,
-        }).ExecuteCommandAsync();
-
-        playerInfo.SignInCount += 1;
-        playerInfo.EmeraldVal += emeraldVal;
-        playerInfo.UpdateUserId = playerInfo.Id;
-        await DbContext.Db.Updateable(playerInfo).ExecuteCommandAsync();
-
-        var path = ImageGenerator.GenerateImage($"签到成功,第{recordNum}次签到");
-        var msg = new MessageBody() { SoraSegment.At(senderId), SoraSegment.Image(path) };
-        await eventArgs.Reply(msg);
-    }
-
-    #endregion
-
-    #region 任务队列
-    bool isTask = false;
-    if (text.StartsWith("TTS:", StringComparison.OrdinalIgnoreCase)
-        || text.Equals("我要挖鸭挖")
-        || text.StartsWith("!UUID", StringComparison.OrdinalIgnoreCase)
-        || text.StartsWith("！UUID", StringComparison.OrdinalIgnoreCase)
-        )
-    {
-        isTask = true;
-    }
-    if (isTask)
-    {
-        AnsiConsole.Write($"[green]添加到任务队列：[/]{eventArgs.Message.RawText}");
-        await GroupFunction.JoinTask(new()
-        {
-            ReviceMsg = eventArgs.Message.GetText(),
-            SenderGroupId = groupId.ToString(),
-            SenderId = senderId.ToString(),
-            ReplyId = senderId.ToString(),
-            ReplyGroupId = groupId.ToString(),
-            GroupOrPrivate = 0,
-            Type = 0,
-            ExcuteTime = DateTime.Now.AddSeconds(3),
-            IsExcute = 0,
-        });
-    }
-    #endregion
 
 
 };
 
 
-//启动服务并捕捉错误
-await service.StartService()
-             .RunCatch(e => Log.Error("Sora Service", Log.ErrorLogBuilder(e)));
-
-var api = service.GetApi(service.ServiceId);
-
-await api.SendPrivateMessage(1714227099, "你吃饭了？");
-
-
 //BotOptions.Get("WebSocketAddress", "QQ")
 //CqWsSession cqWsSession = GetSession();
-MyEventHandle.EnableEventHandle(api);
+MyEventHandle.EnableEventHandle(service.GetApi(service.ServiceId));
 
 
 

@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Kook.Commands;
 using MineCosmos.Bot.Entity;
+using MineCosmos.Bot.Helper;
 using MineCosmos.Bot.Helper.Minecraft;
 using MineCosmos.Bot.Interactive;
 using MineCosmos.Bot.Service;
@@ -32,7 +33,7 @@ internal class MyEventHandle
             while (true)
             {
                 await Task.Delay(TimeSpan.FromSeconds(10));
-                var info = await DbContext.Db.Queryable<TaskQueueEntity>()
+                var info = await SqlSugarHelper.Instance.Queryable<TaskQueueEntity>()
                  .Where(expression: a => a.IsExcute == 0 && a.ExcuteTime <= DateTime.Now)
                  .OrderByDescending(a => a.CreateTime)
                 .FirstAsync();
@@ -48,19 +49,15 @@ internal class MyEventHandle
                 long.TryParse(info.SenderId, out long senderId);
                 MessageBody msg = "NotAbout";
 
-
-
-                await wsSession.SendGroupMessage(groupId, new Sora.Entities.MessageBody());
-
                 if (command.StartsWith("TTS:", StringComparison.OrdinalIgnoreCase))
                 {
                     msg = TTSHandle(command);
                 }
 
-                if (command.StartsWith("UUID", StringComparison.OrdinalIgnoreCase))
-                {
-                    msg = await UUIDHandle(values, info.SenderId);
-                }
+                //if (command.StartsWith("UUID", StringComparison.OrdinalIgnoreCase))
+                //{
+                //    msg = await UUIDHandle(values, info.SenderId);
+                //}
 
 
                 if (info.GroupOrPrivate.Equals(0))
@@ -74,7 +71,7 @@ internal class MyEventHandle
                 }
 
 
-                await DbContext.Db.Deleteable(info).ExecuteCommandAsync();
+                await SqlSugarHelper.Instance.Deleteable(info).ExecuteCommandAsync();
             }
         });
     }
@@ -88,19 +85,6 @@ internal class MyEventHandle
         //return new CqMessage { new CqTtsMsg(command[4..]) };
     }
 
-    public static async Task<MessageBody> UUIDHandle(string[] values,string senderId)
-    {
-        if (values[1].Equals(string.IsNullOrWhiteSpace) || values.Length < 2)
-        {
-            return new MessageBody { "查询格式不正确 \n格式:!UUID <你的名字>" };
-        }
-        string name = values[1];
-        var uuidInfo = await MinecraftDataApi.GetUuidByName(name);
-        var msg = new MessageBody();
-        long.TryParse(senderId, out long senderQQ);
-        msg.Add(SoraSegment.At(senderQQ));
-        msg.AddText($"\n {uuidInfo.name} \n {uuidInfo.id}");
-        return msg;
-    }
+    
 }
 

@@ -9,7 +9,13 @@ using System.Threading.Tasks;
 using Flurl;
 using Flurl.Http;
 using MineCosmos.Bot.Entity;
+using MineCosmos.Bot.Helper;
 using MineCosmos.Bot.Service;
+using Sora.Entities.Segment;
+using Sora.Entities;
+using MineCosmos.Bot.Helper.Minecraft;
+using System.Xml.Linq;
+using Newtonsoft.Json.Linq;
 
 namespace MineCosmos.Bot.Interactive
 {
@@ -18,9 +24,8 @@ namespace MineCosmos.Bot.Interactive
 
         public static async Task JoinTask(TaskQueueEntity model)
         {
-            await DbContext.Db.Insertable(model).ExecuteCommandAsync();
+            await SqlSugarHelper.Instance.Insertable(model).ExecuteCommandAsync();
         }
-
 
         public static string DownloadFilePath = "head_image";
 
@@ -123,5 +128,145 @@ namespace MineCosmos.Bot.Interactive
             await qqUrl.DownloadFileAsync(DownloadFilePath, fileName);
             return filePath;
         }
+
+        /// <summary>
+        /// 签到
+        /// </summary>
+        /// <param name="msgId"></param>
+        /// <param name="playerInfo"></param>
+        /// <returns></returns>
+        public static async Task<MessageBody> SignlInAsyncMessage(int msgId, PlayerInfoEntity playerInfo)
+        {
+            var item = GroupFunction.GetItem();
+            var integral = new Random().Next(1, 3);
+            var emeraldVal = new Random().Next(5, 10);
+            var luckColors = new List<string> { "红色", "黄色", "绿色", "蓝色", "紫色" };
+            var luckColorndex = new Random().Next(0, luckColors.Count - 1);
+            var luckNumber = new Random().Next(111, 999);
+            var luckVal = new Random().Next(1, 100);
+
+            var recordNum = await SqlSugarHelper.Instance.Queryable<PlayerSingInRecordEntity>()
+               .Where(a => a.Id == playerInfo.Id)
+               .CountAsync();
+
+            await SqlSugarHelper.Instance.Insertable(new PlayerSingInRecordEntity
+            {
+                PlayerId = playerInfo.Id,
+                CreateUserId = playerInfo.Id,
+                UpdateUserId = playerInfo.Id,
+                Integral = integral,
+                EmeraldVal = emeraldVal,
+                LuckColor = luckColors[luckColorndex],
+                LuckNumber = luckNumber,
+                LuckVal = luckVal,
+            }).ExecuteCommandAsync();
+            playerInfo.SignInCount += 1;
+            playerInfo.EmeraldVal += emeraldVal;
+            playerInfo.UpdateUserId = playerInfo.Id;
+            await SqlSugarHelper.Instance.Updateable(playerInfo).ExecuteCommandAsync();
+
+            var stream = ImageGenerator.GenerateImageToStream($"今日首言,自动签到成功 >_< \r\n第{recordNum}次签到", 10);
+            MessageBody msg = SoraSegment.Reply(msgId) + SoraSegment.Image(stream);
+            return msg;
+        }
+
+
+        /// <summary>
+        /// 查询UUID
+        /// </summary>
+        /// <param name="values"></param>
+        /// <param name="senderId"></param>
+        /// <returns></returns>
+        public static async Task<MessageBody> QueryUUIDInfoMessageAsync(string[] values, int msgId)
+        {
+            if (values.Length < 2 || values[1].Equals(string.IsNullOrWhiteSpace))
+            {
+                return SoraSegment.Reply(msgId) + SoraSegment.Text("请输入玩家名称");
+            }
+            string name = values[1];
+            var uuidInfo = await MinecraftDataApi.GetUuidByName(name);
+            var msg = SoraSegment.Reply(msgId) + SoraSegment.Text(uuidInfo.name) + SoraSegment.Text(uuidInfo.id);
+            return msg;
+        }
+
+        public static async Task<MessageBody> GetMinecraftPlayerSkin(string[] values, int msgId)
+        {
+            if (values.Length < 2 || values[1].Equals(string.IsNullOrWhiteSpace))
+            {
+                return null;
+            }
+            string name = values[1];
+
+            //var msg = SoraSegment.Reply(msgId);
+
+            var uuidInfo = await MinecraftDataApi.GetUuidByName(name);
+            if (uuidInfo == null) { return SoraSegment.Reply(msgId) + SoraSegment.Text("无效的玩家名称(可能你不是正版"); }
+
+            var stream = await MinecraftDataApi.GetMinecraftPlayerSkin(uuidInfo?.id);
+
+            return SoraSegment.Reply(msgId) + SoraSegment.Image(stream);
+        }
+
+
+        public static async Task<MessageBody> GetServerInfo(string[] values, int msgId)
+        {
+            if (values.Length < 2 || values[1].Equals(string.IsNullOrWhiteSpace))
+            {
+                return null;
+            }
+            string serverName = values[1];
+
+            var serverInfo = await SqlSugarHelper.Instance.Queryable<MinecraftServerEntity>().FirstAsync(a => a.ServerName == serverName);
+
+            if (serverInfo is null)
+            {
+                return SoraSegment.Reply(msgId) + GetTextToImageMessage($"未找到服务器信息 >_< \r\n 先私聊机器人注册服务器");
+            }
+            else
+            {
+                int.TryParse(serverInfo.ServerPort, out int port);
+
+                if (port < 1111)
+                    return SoraSegment.Reply(msgId) + GetTextToImageMessage($"端口小于1111的服务器？ >_< \r\n 逗我？");
+
+                var mcInfo = await MinecraftDataApi.GetServerInfo(serverInfo.ServerIp, port);
+
+                return SoraSegment.Reply(msgId) +
+                   GetTextToImageMessage($"{serverInfo.ServerName} 服务器信息 \r\n在线：{mcInfo.OnLine} / {mcInfo.Max} \r\n 版本： {mcInfo.Version} \r\n {mcInfo.Title}");
+            }
+
+
+        }
+
+
+        public static async Task<MessageBody> GetSystemInfo(string[] values, int msgId)
+        {
+            var playerInfo = await SqlSugarHelper.Instance.CopyNew().Queryable<PlayerInfoEntity>().FirstAsync();
+
+            StringBuilder sb = new();
+
+
+            if (playerInfo is null)
+            {
+                sb.AppendLine("没有你的信息");
+                return SoraSegment.Reply(msgId) + GetTextToImageMessage(sb.ToString());
+            }
+            else
+            {
+                sb.AppendLine($"名称：{playerInfo.Name}");                
+                sb.AppendLine($"签到次数：{playerInfo.SignInCount}");
+                sb.AppendLine($"绿宝石：{playerInfo.EmeraldVal}");
+                sb.AppendLine($"创建时间：{playerInfo.CreateTime}");
+                return SoraSegment.Reply(msgId) + GetTextToImageMessage(sb.ToString());
+            }
+        }
+
+
+        private static MessageBody GetTextToImageMessage(string text)
+        {
+            var imgStream = ImageGenerator.GenerateImageToStream(text);
+            return SoraSegment.Image(imgStream);
+        }
+
     }
 }

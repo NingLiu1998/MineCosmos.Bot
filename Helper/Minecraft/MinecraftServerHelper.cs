@@ -20,9 +20,9 @@ namespace MineCosmos.Bot.Helper.Minecraft
         /// <returns></returns>
         public static async Task AppendCommandToServer(MinecraftServerCommandEntity model)
         {
-            if (!await DbContext.Db.Queryable<MinecraftServerCommandEntity>().AnyAsync(a => a.Command == model.Command && a.ServerId == model.ServerId))
+            if (!await SqlSugarHelper.Instance.Queryable<MinecraftServerCommandEntity>().AnyAsync(a => a.Command == model.Command && a.ServerId == model.ServerId))
             {
-                await DbContext.Db.Insertable(model).ExecuteCommandAsync();
+                await SqlSugarHelper.Instance.Insertable(model).ExecuteCommandAsync();
             }
         }
 
@@ -33,15 +33,15 @@ namespace MineCosmos.Bot.Helper.Minecraft
         /// <returns></returns>
         public static async Task<List<MinecraftServerCommandEntity>> GetLstCommand(int serverId)
         {
-            return await DbContext.Db.Queryable<MinecraftServerCommandEntity>().Where(a => a.ServerId == serverId).ToListAsync();
+            return await SqlSugarHelper.Instance.Queryable<MinecraftServerCommandEntity>().Where(a => a.ServerId == serverId).ToListAsync();
         }
 
 
         public static async Task AppendServer(MinecraftServerEntity model)
         {
-            if (!await DbContext.Db.Queryable<MinecraftServerEntity>().AnyAsync(a => a.ServerName == model.ServerName))
+            if (!await SqlSugarHelper.Instance.Queryable<MinecraftServerEntity>().AnyAsync(a => a.ServerName == model.ServerName))
             {
-                await DbContext.Db.Insertable(model).ExecuteCommandAsync();
+                await SqlSugarHelper.Instance.Insertable(model).ExecuteCommandAsync();
                 McServerManager.Instance.Add(model);
             }
         }
