@@ -9,13 +9,12 @@ using System.Threading.Tasks;
 using Flurl;
 using Flurl.Http;
 using MineCosmos.Bot.Entity;
-using MineCosmos.Bot.Helper;
 using MineCosmos.Bot.Service;
 using Sora.Entities.Segment;
 using Sora.Entities;
-using MineCosmos.Bot.Helper.Minecraft;
 using System.Xml.Linq;
 using Newtonsoft.Json.Linq;
+using MineCosmos.Bot.Helper;
 
 namespace MineCosmos.Bot.Interactive
 {
@@ -165,79 +164,13 @@ namespace MineCosmos.Bot.Interactive
             playerInfo.UpdateUserId = playerInfo.Id;
             await SqlSugarHelper.Instance.Updateable(playerInfo).ExecuteCommandAsync();
 
-            var stream = ImageGenerator.GenerateImageToStream($"今日首言,自动签到成功 >_< \r\n第{recordNum}次签到", 10);
+            var stream = ServiceCentern.commonService.GenerateImageToStream($"今日首言,自动签到成功 >_< \r\n第{recordNum}次签到", 10);
             MessageBody msg = SoraSegment.Reply(msgId) + SoraSegment.Image(stream);
             return msg;
         }
 
 
-        /// <summary>
-        /// 查询UUID
-        /// </summary>
-        /// <param name="values"></param>
-        /// <param name="senderId"></param>
-        /// <returns></returns>
-        public static async Task<MessageBody> QueryUUIDInfoMessageAsync(string[] values, int msgId)
-        {
-            if (values.Length < 2 || values[1].Equals(string.IsNullOrWhiteSpace))
-            {
-                return SoraSegment.Reply(msgId) + SoraSegment.Text("请输入玩家名称");
-            }
-            string name = values[1];
-            var uuidInfo = await MinecraftDataApi.GetUuidByName(name);
-            var msg = SoraSegment.Reply(msgId) + SoraSegment.Text(uuidInfo.name) + SoraSegment.Text(uuidInfo.id);
-            return msg;
-        }
-
-        public static async Task<MessageBody> GetMinecraftPlayerSkin(string[] values, int msgId)
-        {
-            if (values.Length < 2 || values[1].Equals(string.IsNullOrWhiteSpace))
-            {
-                return null;
-            }
-            string name = values[1];
-
-            //var msg = SoraSegment.Reply(msgId);
-
-            var uuidInfo = await MinecraftDataApi.GetUuidByName(name);
-            if (uuidInfo == null) { return SoraSegment.Reply(msgId) + SoraSegment.Text("无效的玩家名称(可能你不是正版"); }
-
-            var stream = await MinecraftDataApi.GetMinecraftPlayerSkin(uuidInfo?.id);
-
-            return SoraSegment.Reply(msgId) + SoraSegment.Image(stream);
-        }
-
-
-        public static async Task<MessageBody> GetServerInfo(string[] values, int msgId)
-        {
-            if (values.Length < 2 || values[1].Equals(string.IsNullOrWhiteSpace))
-            {
-                return null;
-            }
-            string serverName = values[1];
-
-            var serverInfo = await SqlSugarHelper.Instance.Queryable<MinecraftServerEntity>().FirstAsync(a => a.ServerName == serverName);
-
-            if (serverInfo is null)
-            {
-                return SoraSegment.Reply(msgId) + GetTextToImageMessage($"未找到服务器信息 >_< \r\n 先私聊机器人注册服务器");
-            }
-            else
-            {
-                int.TryParse(serverInfo.ServerPort, out int port);
-
-                if (port < 1111)
-                    return SoraSegment.Reply(msgId) + GetTextToImageMessage($"端口小于1111的服务器？ >_< \r\n 逗我？");
-
-                var mcInfo = await MinecraftDataApi.GetServerInfo(serverInfo.ServerIp, port);
-
-                return SoraSegment.Reply(msgId) +
-                   GetTextToImageMessage($"{serverInfo.ServerName} 服务器信息 \r\n在线：{mcInfo.OnLine} / {mcInfo.Max} \r\n 版本： {mcInfo.Version} \r\n {mcInfo.Title}");
-            }
-
-
-        }
-
+    
 
         public static async Task<MessageBody> GetSystemInfo(string[] values, int msgId)
         {
@@ -264,7 +197,7 @@ namespace MineCosmos.Bot.Interactive
 
         private static MessageBody GetTextToImageMessage(string text)
         {
-            var imgStream = ImageGenerator.GenerateImageToStream(text);
+            var imgStream = ServiceCentern.commonService.GenerateImageToStream(text);
             return SoraSegment.Image(imgStream);
         }
 

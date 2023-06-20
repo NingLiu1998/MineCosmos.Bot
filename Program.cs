@@ -12,28 +12,32 @@ using static System.Net.Mime.MediaTypeNames;
 using Sora.Util;
 using YukariToolBox.LightLog;
 using Kook;
-using MineCosmos.Bot.Helper;
 using MineCosmos.Bot.Interactive;
 using Sora.Entities;
 using Sora.Entities.Segment;
-using MineCosmos.Bot.Helper.Minecraft;
 using Newtonsoft.Json;
 using System;
 using Mapster;
 using SqlSugar;
+using MineCosmos.Bot.Service.Bot;
+using MineCosmos.Bot.Service.Common;
+using MineCosmos.Bot.Helper;
+using System.Text.RegularExpressions;
+using System.Net.Sockets;
+using System.Net;
+using System.Text;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 Console.WriteLine("[MineCosmos Bot Center]");
 
 
 #region Host
-using IHost host = Host.CreateDefaultBuilder(args)
+IHost host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((hostingContext, configuration) =>
     {
         configuration.Sources.Clear();
 
         IHostEnvironment env = hostingContext.HostingEnvironment;
-
-
         configuration
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
             .AddJsonFile($"appsettings.{env.EnvironmentName}.json", true, true);
@@ -42,14 +46,10 @@ using IHost host = Host.CreateDefaultBuilder(args)
 
         List<BotOptions> options = new();
 
-        configurationRoot.GetSection(nameof(BotOptions))
+        configurationRoot.GetSection("CqhttpQQ")
                          .Bind(options);
 
         BotOptions.Init(options);
-
-
-        //SqlSugarHelper.InstanceConfigs = configurationRoot.GetSection("ConnectionStrings:SqlSugarConfig")
-        //    .Get<List<SqlSugarConfig>>(); 
 
         SqlSugarHelper.Instance.CodeFirst.InitTables(
        typeof(PlayerInfoEntity),
@@ -59,19 +59,90 @@ using IHost host = Host.CreateDefaultBuilder(args)
         typeof(TimeEventHandleEntity)
         );
 
-
-
-        //Console.WriteLine($"TransientFaultHandlingOptions.Enabled={options.Enabled}");
-        //Console.WriteLine($"TransientFaultHandlingOptions.AutoRetryDelay={options.AutoRetryDelay}");
     })
     .ConfigureServices(services =>
     {
-        services.AddSingleton<ServiceLifetimeReporter>();
+        //services.AddSingleton<ServiceLifetimeReporter>();
+        //services.AddSingleton<ICommandManagerService, CommandManagerService>();
+        services.TryAddSingleton<ICommonService, CommonService>();
+     //   services.TryAddSingleton<IServerManagerService, ServerManagerService>();        
+        //var serviceProvider = services.BuildServiceProvider();
+
+
+        //services.AddSingleton<ICommonService>();
+
+        //ServiceCentern.commonService = serviceProvider.GetService<CommonService>();
+        //var serviceCenter = serviceProvider.GetService<CommonService>();
     })
     .Build();
 
+var commonService = host.Services.GetService<ICommonService>();
+//var serverManagerService = host.Services.GetService<ICommandManagerService>();
+
+
+
+if (commonService is null)
+{
+    Console.WriteLine("MineCosmos Bot Center", "服务未能正常启动");
+    return;
+}
+
+
+
+
 #endregion
 
+#region SelfSocket
+
+_ = Task.Run(() =>
+{
+    //// 创建一个 IP 地址对象，表示要监听的主机和端口
+    //IPAddress ipAddress = IPAddress.Parse("127.0.0.1");
+    //int port = 7415;
+    //IPEndPoint localEndPoint = new IPEndPoint(ipAddress, port);
+
+    //// 创建一个 Socket 对象
+    //Socket listener = new Socket(ipAddress.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+
+    //// 将 Socket 绑定到要监听的地址和端口
+    //listener.Bind(localEndPoint);
+
+    //// 开始监听传入的连接请求
+    //listener.Listen(10);
+
+    //Console.WriteLine("Waiting for a connection...");
+
+    //while (true)
+    //{
+    //    // 接受传入的连接请求，并创建一个新的 Socket 对象来处理连接
+    //    Socket handler = listener.Accept();
+
+    //    // 处理连接的逻辑
+    //    Console.WriteLine($"Client connected from {handler.RemoteEndPoint}");
+
+    //    byte[] buffer = new byte[1024];
+    //    int bytesReceived = handler.Receive(buffer);
+    //    string data = Encoding.ASCII.GetString(buffer, 0, bytesReceived);
+    //    Console.WriteLine($"Received data: {data}");
+
+    //    // 发送回复消息到客户端
+    //    string replyMessage = "Server received your message: " + data;
+    //    byte[] replyBuffer = Encoding.ASCII.GetBytes(replyMessage);
+    //    handler.Send(replyBuffer);
+
+    //    // 关闭连接
+    //    handler.Shutdown(SocketShutdown.Both);
+    //    handler.Close();
+    //}
+});
+
+
+
+
+#endregion
+
+
+#region Sora
 
 var service = SoraServiceFactory.CreateService(new ClientConfig() { Port = 8081 });
 
@@ -79,25 +150,15 @@ var service = SoraServiceFactory.CreateService(new ClientConfig() { Port = 8081 
 await service.StartService()
              .RunCatch(e => Log.Error("Sora Service", Log.ErrorLogBuilder(e)));
 
-#region 测试信息
-var stream = ImageGenerator.GenerateImageToStream("第一行内容 123456 \r\n 第二行内容 \r\n 第三行内容");
-await service.GetApi(service.ServiceId)
-    .SendPrivateMessage(1714227099, new MessageBody
-    { SoraSegment.Image(stream), SoraSegment.Text("下午好") });
-#endregion
-
 service.Event.OnPrivateMessage += async (sender, eventArgs) =>
 {
     string[] values = CommonFunction.GetCommand(eventArgs.Message.GetText());
     string command = values[0];
     var privateId = eventArgs.Sender.Id;
-
-
-
     switch (command)
     {
         case "test":
-            var stream = ImageGenerator.GenerateImageToStream($"测试图片发送");
+            var stream = commonService.GenerateImageToStream($"测试图片发送");
             await eventArgs.Reply(new MessageBody { SoraSegment.Image(stream) });
             break;
         case "注册服务器":
@@ -127,7 +188,7 @@ service.Event.OnPrivateMessage += async (sender, eventArgs) =>
                 RconPort = serverRconPort,
                 RconPwd = serverRconPwd
             };
-            await MinecraftServerHelper.AppendServer(data);
+            //await serverManagerService.AppendServer(data);
             await eventArgs.Reply(new MessageBody { "注册成功\n", JsonConvert.SerializeObject(data) });
             break;
     }
@@ -135,6 +196,11 @@ service.Event.OnPrivateMessage += async (sender, eventArgs) =>
 
 service.Event.OnGroupMessage += async (sender, eventArgs) =>
 {
+    return;
+    //屏蔽除ABC群外的所有群消息
+    if (eventArgs.SourceGroup.Id != 588504056)
+        return;
+
     try
     {
 
@@ -157,54 +223,9 @@ service.Event.OnGroupMessage += async (sender, eventArgs) =>
         await Task.Delay(TimeSpan.FromSeconds(new Random().Next(5, 10)));
         #endregion
 
-        var playerInfo = await SqlSugarHelper.Instance.CopyNew().Queryable<PlayerInfoEntity>().FirstAsync(a => a.QQ == senderId);
-
-        #region 发言记录
-
-        if (playerInfo == null)
-        {
-            var avator = await GroupFunction.DownloadQQImage(senderId.ToString());
-            playerInfo = await SqlSugarHelper.Instance.Insertable(new PlayerInfoEntity
-            {
-                Avatar = avator,
-                QQ = senderId,
-                EmeraldVal = 100,
-                Name = card,
-            }).ExecuteReturnEntityAsync();
-
-            var imgStream = ImageGenerator.GenerateImageToStream("第一次在Q群发言 o.O \r\n 送你100个绿宝石", 10);
-            MessageBody msg = SoraSegment.Reply(msgId) + SoraSegment.Image(imgStream);
-            await eventArgs.Reply(msg);
-            //await Task.Delay(1200);
-        }
-        else
-        {
-            playerInfo.EmeraldVal += 1;
-            playerInfo.UpdateUserId = playerInfo.Id;
-            await SqlSugarHelper.Instance.Updateable(playerInfo).ExecuteCommandAsync();
-        }
-
-        #endregion
-
-        #region 签到
-        var signInInfo = await SqlSugarHelper.Instance.Queryable<PlayerSingInRecordEntity>()
-           .Where(a => a.PlayerId == playerInfo.Id && a.CreateTime == DateTime.Now.ToString("yyyy-MM-dd"))
-             .OrderByDescending(a => a.CreateTime)
-         .FirstAsync();
-
-        if (signInInfo == null)
-        {
-            var msg = await GroupFunction.SignlInAsyncMessage(msgId, playerInfo);
-            await eventArgs.Reply(msg);
-        }
-        #endregion
-
         #region 功能
 
-
-
-       //string command = msgText.Substring(0, Math.Max(position1, position2));
-
+        //string command = msgText.Substring(0, Math.Max(position1, position2));
         //校验指令
         string msgText = eventArgs.Message.GetText();
         if (string.IsNullOrWhiteSpace(msgText)) return;
@@ -214,46 +235,10 @@ service.Event.OnGroupMessage += async (sender, eventArgs) =>
         string[] values = CommonFunction.GetCommand(text);
         string command = values[0];
         //定义即将发送的消息
-        MessageBody messageBody = null;
-        if (command.StartsWith("uuid", StringComparison.OrdinalIgnoreCase))
-        {
-            messageBody = await GroupFunction.QueryUUIDInfoMessageAsync(values, msgId);
 
-        }
-        else if (command.StartsWith("skin", StringComparison.OrdinalIgnoreCase))
-        {
-            messageBody = await GroupFunction.GetMinecraftPlayerSkin(values, msgId);
-        }
-        else if (command.StartsWith("server")|| command.StartsWith("服务器信息"))
-        {
-            messageBody = await GroupFunction.GetServerInfo(values, msgId);
-        }else if (command.StartsWith("我的信息"))
-        {
-            messageBody = await GroupFunction.GetSystemInfo(values, msgId);
-        }
-
-        //统一使用回复消息
-        if (messageBody != null)            
-            await eventArgs.Reply(messageBody);
 
         return;
 
-        #endregion
-
-        #region 任务 TODO 
-        //AnsiConsole.Write($"[green]添加到任务队列：[/]{eventArgs.Message.RawText}");
-        //await GroupFunction.JoinTask(new()
-        //{
-        //    ReviceMsg = eventArgs.Message.GetText(),
-        //    SenderGroupId = groupId.ToString(),
-        //    SenderId = senderId.ToString(),
-        //    ReplyId = senderId.ToString(),
-        //    ReplyGroupId = groupId.ToString(),
-        //    GroupOrPrivate = 0,
-        //    Type = 0,
-        //    ExcuteTime = DateTime.Now.AddSeconds(3),
-        //    IsExcute = 0,
-        //});
         #endregion
 
     }
@@ -262,28 +247,14 @@ service.Event.OnGroupMessage += async (sender, eventArgs) =>
         Console.WriteLine("群消息处理发生异常" + ex.Message);
     }
 
-
-
 };
 
-
-//BotOptions.Get("WebSocketAddress", "QQ")
-//CqWsSession cqWsSession = GetSession();
-MyEventHandle.EnableEventHandle(service.GetApi(service.ServiceId));
+#endregion
 
 
+#region KooK
 
-//定时执行队列任务
-
-
-
-
-
-
-
-
-
-
+#endregion
 
 while (true)
 {
