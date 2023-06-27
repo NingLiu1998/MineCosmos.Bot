@@ -62,28 +62,15 @@ IHost host = Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices(services =>
     {
-        //services.AddSingleton<ServiceLifetimeReporter>();
-        //services.AddSingleton<ICommandManagerService, CommandManagerService>();
         services.TryAddSingleton<ICommonService, CommonService>();
-     //   services.TryAddSingleton<IServerManagerService, ServerManagerService>();        
-        //var serviceProvider = services.BuildServiceProvider();
-
-
-        //services.AddSingleton<ICommonService>();
-
-        //ServiceCentern.commonService = serviceProvider.GetService<CommonService>();
-        //var serviceCenter = serviceProvider.GetService<CommonService>();
     })
     .Build();
 
 var commonService = host.Services.GetService<ICommonService>();
-//var serverManagerService = host.Services.GetService<ICommandManagerService>();
-
-
-
 if (commonService is null)
 {
     Console.WriteLine("MineCosmos Bot Center", "服务未能正常启动");
+    Console.ReadKey();
     return;
 }
 
@@ -147,7 +134,7 @@ _ = Task.Run(() =>
 var service = SoraServiceFactory.CreateService(new ClientConfig() { Port = 8081 });
 
 //启动服务并捕捉错误
-await service.StartService()
+_ = service.StartService()
              .RunCatch(e => Log.Error("Sora Service", Log.ErrorLogBuilder(e)));
 
 service.Event.OnPrivateMessage += async (sender, eventArgs) =>
@@ -253,7 +240,7 @@ service.Event.OnGroupMessage += async (sender, eventArgs) =>
 
 
 #region KooK
-
+await ServiceCentern.StartKookNet();
 #endregion
 
 while (true)
