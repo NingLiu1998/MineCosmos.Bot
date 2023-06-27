@@ -26,7 +26,7 @@ namespace MineCosmos.Bot.Helper
         public static async Task StartKookNet()
         {
             _client = new KookSocketClient();
-            var token = "1/MTc1MDk=/RLqHR0uH/bGx/XppIvczXA==";
+            var token = "1/MTc1MDk=/RLQh23123R0uH/bGx/XppIvczXA==";
             await _client.LoginAsync(TokenType.Bot, token);
             await _client.StartAsync();
             _client.Ready += () =>
